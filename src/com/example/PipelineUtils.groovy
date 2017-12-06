@@ -12,17 +12,18 @@ def login(String apiURL, String credentialsId) {
 /**
    * Runs mvn clean package on application code
    */
-def unitTestAndPackageJar(String mavenCredentialsId, String pomPath, String mavenArgs) {
+def unitTestAndPackageJar(String pomPath, String mavenArgs) {
     stage('Unit Test & Package Jar'){
         print "Packaging Jar..."
-        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: mavenCredentialsId, passwordVariable: 'pass', usernameVariable: 'user']]) {
-            sh """
-                mvn -f ${pomPath} ${mavenArgs} -U -DartifactoryUser=${user} -DartifactoryPassword=${pass} clean package
-            """
-        }
+        sh """
+            mvn -f ${pomPath} ${mavenArgs} -U clean package
+        """
     }
 }
 
+/**
+   * Processes and applies a template and then starts a binary build from file
+   */
 def processTemplateAndStartBuild(String ocpUrl, String ocpAuthTokenCredentialId, String templatePath,
     String parameters, String project, String buildConfigName, String jarPath) {
 
@@ -33,6 +34,170 @@ def processTemplateAndStartBuild(String ocpUrl, String ocpAuthTokenCredentialId,
             oc process -f ${templatePath} ${parameters} -n ${project} | oc apply -f - -n ${project}
             oc start-build ${buildConfigName} --from-file=${jarPath} --follow -n ${project}
         """
+    }
+}
+
+
+/**
+   * Processes and applies a template and then triggers a deployment
+   */
+def processTemplateAndDeploy(String ocpUrl, String ocpAuthTokenCredentialId, String templatePath,
+    String parameters, String project, String deploymentConfigName) {
+
+    stage("OCP Deploy"){
+        print "Deploying in OpenShift..."
+        login(ocpUrl, ocpAuthTokenCredentialId)
+        sh """
+            oc process -f ${templatePath} ${parameters} -n ${project} | oc apply -f - -n ${project}
+        """
+
+        withCredentials([string(credentialsId: ocpAuthTokenCredentialId, variable: 'authToken')]) {
+
+            // Assuming the deployment config has image change triggers, skip right to verify deployment
+            // openshiftDeploy(
+            //     depCfg: microservice,
+            //     namespace: project,
+            //     apiURL: ocpUrl,
+            //     authToken: authToken
+            // )
+
+            openshiftVerifyDeployment(
+                depCfg: microservice,
+                namespace: project,
+                replicaCount: '1',
+                apiURL: ocpUrl,
+                authToken: authToken
+            )
+        }
+    }
+}
+
+def blueGreenDeploy(String microservice, String project, String ocpUrl, String templatesDir,
+    String ocpAuthTokenCredentialId, String imageTag) {
+
+    stage("A/B Deploy in ${project}"){
+
+        // Deploy the "green" image
+        processTemplateAndDeploy(ocpUrl, ocpAuthTokenCredentialId, "${templatesDir}/deploy-service-template.yaml",
+            "APPLICATION_NAME=${microservice}-green IMAGE_TAG=${imageTag}", project, microservice)
+
+        input 'Begin A/B Testing?'
+
+        try {
+            // Deploy split route
+            sh """
+                oc process -f ${templatesDir}/route-split-template.yml APPLICATION_NAME=${microservice} \
+                    MAJOR_SERVICE_NAME=${microservice} MINOR_SERVICE_NAME=${microservice}-green -n ${project} | oc apply -f - -n ${project}
+            """
+
+            input 'Increase percentages to 50/50?'
+            sh """
+                oc patch route ${microservice} -p '{"spec":{"to":{"kind": "Service","name": "${microservice}","weight": 50},"alternateBackends": [{"kind": "Service","name": "${microservice}-green","weight": 50}]}}' -n ${project}
+            """
+
+            input 'Increase percentages to 0/100?'
+            sh """
+                oc patch route ${microservice} -p '{"spec":{"to":{"kind": "Service","name": "${microservice}","weight": 0},"alternateBackends": [{"kind": "Service","name": "${microservice}-green","weight": 100}]}}' -n ${project}
+            """
+
+            input 'Rollout?'
+
+            // Now to do the roll out, first updating the dc that is receiving no traffic with the correct image
+            processTemplateAndDeploy(ocpUrl, ocpAuthTokenCredentialId, "${templatesDir}/deploy-service-template.yaml",
+                "APPLICATION_NAME=${microservice} IMAGE_TAG=${imageTag}", project, microservice)
+
+            aborted = false
+
+        } catch(err) {
+
+            aborted = true
+
+        } finally {
+            // Switch the route back to the "blue" deployment and delete green
+            sh """
+                oc process -f ${templatesDir}/route-template.yml \
+                    APPLICATION_NAME=${microservice} -n ${project} | oc apply -f - -n ${project}
+
+                oc delete svc ${microservice}-green -n ${project}
+                oc delete dc ${microservice}-green -n ${project}
+            """
+            if(aborted){
+                error("A/B Testing Aborted")
+            }
+
+        }
+    }
+}
+
+def downloadDeploymentAndBlueGreenDeploy(String microservice, String project, String ocpUrl, String ocpAuthTokenCredentialId,
+    String artifactoryCredentialsId, String registryUrl, String imageTag, String additionalArgs) {
+
+    stage("A/B Deploy in ${project}"){
+
+
+        login(ocpUrl, ocpAuthTokenCredentialId)
+
+        // Deploy Green on side
+        sh """
+            cat openshift/config-maps/${project}/config.yml | sed -e "s/name: ${microservice}/name: ${microservice}-green/" | oc apply -f - -n dsm-release
+
+            oc process -f openshift/templates/mplat-dsm-deploy-service-template.yml APPLICATION_NAME=${microservice}-green \
+                IMAGE=${registryUrl}/${microservice}:${imageTag} -n ${project} | oc apply -f - -n ${project}
+        """
+
+        triggerDeploymentAndVerify(ocpAuthTokenCredentialId, microservice + "-green", project, ocpUrl, '1')
+
+        input 'Begin A/B Testing?'
+
+        try {
+            // Deploy split route
+            sh """
+                oc process -f openshift/templates/mplat-dsm-route-split-template.yml APPLICATION_NAME=${microservice} \
+                    MAJOR_SERVICE_NAME=${microservice} MINOR_SERVICE_NAME=${microservice}-green -n ${project} | oc apply -f - -n ${project}
+            """
+
+            input 'Increase percentages to 50/50?'
+            sh """
+                oc patch route ${microservice} -p '{"spec":{"to":{"kind": "Service","name": "${microservice}","weight": 50},"alternateBackends": [{"kind": "Service","name": "${microservice}-green","weight": 50}]}}' -n dsm-release
+            """
+
+            input 'Increase percentages to 0/100?'
+            sh """
+                oc patch route ${microservice} -p '{"spec":{"to":{"kind": "Service","name": "${microservice}","weight": 0},"alternateBackends": [{"kind": "Service","name": "${microservice}-green","weight": 100}]}}' -n dsm-release
+            """
+
+            input 'Rollout?'
+
+            // Now to do the roll out, first updating the dc that is receiving no traffic with the correct image
+            sh """
+                oc apply -f openshift/config-maps/${project}/config.yml
+
+                oc process -f openshift/templates/mplat-dsm-deploy-service-template.yml APPLICATION_NAME=${microservice} \
+                    IMAGE=${registryUrl}/${microservice}:${imageTag} -n ${project} | oc apply -f - -n ${project}
+            """
+            triggerDeploymentAndVerify(ocpAuthTokenCredentialId, microservice, project, ocpUrl, '1')
+
+            aborted = false
+
+        } catch(err) {
+
+            aborted = true
+
+        } finally {
+            // If any of the above steps fail we want to switch the route back to the "blue" deployment
+            sh """
+                oc process -f openshift/templates/mplat-dsm-route-template.yml \
+                    APPLICATION_NAME=${microservice} -n ${project} | oc apply -f - -n ${project}
+
+                oc delete svc ${microservice}-green -n ${project}
+                oc delete dc ${microservice}-green -n ${project}
+                oc delete configmap ${microservice}-green -n ${project}
+            """
+            if(aborted){
+                error("A/B Testing Aborted")
+            }
+
+        }
     }
 }
 
@@ -143,6 +308,40 @@ def getSonarQubeTaskStatus(String statusUrl) {
     print "SonarQube task status is " + taskStatus
     return taskStatus
 }
+
+
+/**
+ * Runs JMeter tests directly on agent, be sure the image has the binaries downloaded and JMETER_HOME set
+ */
+def jmeterTest(String testFilePath, String propertiesFilePath, String hostName, String threads, String count){
+    stage('Stress Tests') {
+        sh """
+            ${JMETER_HOME}/bin/jmeter -n -t "${testFilePath}" -l "jmeter-results.jtl" \
+                -p "${testFilePath}" -j /dev/stdout -Jhostname=${hostName} \
+                -Jthreads=${threads} -Jcount=${count}
+        """
+
+        performanceReport compareBuildPrevious: false,
+            configType: 'ART',
+            errorFailedThreshold: 0,
+            errorUnstableResponseTimeThreshold: '',
+            errorUnstableThreshold: 0,
+            failBuildIfNoResultFile: false,
+            ignoreFailedBuild: false,
+            ignoreUnstableBuild: true,
+            modeOfThreshold: false,
+            modePerformancePerTestCase: true,
+            modeThroughput: true,
+            nthBuildNumber: 0,
+            parsers: [[$class: 'JMeterParser', glob: 'jmeter-results.jtl']],
+            relativeFailedThresholdNegative: 0,
+            relativeFailedThresholdPositive: 0,
+            relativeUnstableThresholdNegative: 0,
+            relativeUnstableThresholdPositive: 0
+    }
+}
+
+
 
 def downloadDeploymentAndDeploy(String microservice, String project, String ocpUrl, String ocpAuthTokenCredentialId,
     String artifactoryCredentialsId, String distribuitionZipUrl, String artifactoryUrl, String imageTag, String additionalArgs) {
