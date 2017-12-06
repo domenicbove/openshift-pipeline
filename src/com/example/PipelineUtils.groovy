@@ -76,14 +76,14 @@ def blueGreenDeploy(String ocpUrl, String authToken, String microservice, String
 
         // Deploy the "green" image
         processTemplateAndDeploy(ocpUrl, authToken, "${templatesDir}/deploy-service-template.yaml",
-            "APPLICATION_NAME=${microservice}-green IMAGE_TAG=${imageTag}", project, "${microservice}-green")
+            "APPLICATION_NAME=${microservice}-green IMAGE_NAME=${microservice} IMAGE_TAG=${imageTag}", project, "${microservice}-green")
 
         input 'Begin A/B Testing?'
 
         try {
             // Deploy split route
             sh """
-                oc process -f ${templatesDir}/route-split-template.yml APPLICATION_NAME=${microservice} \
+                oc process -f ${templatesDir}/route-split-template.yaml APPLICATION_NAME=${microservice} \
                     MAJOR_SERVICE_NAME=${microservice} MINOR_SERVICE_NAME=${microservice}-green -n ${project} | oc apply -f - -n ${project}
             """
 
