@@ -35,7 +35,7 @@ def call(body) {
 
                 // Image tag will be the git commit, the best version option
                 tag = scmVars.GIT_COMMIT.take(7)
-                print "gitCommit: ${gitCommit}"
+                print "gitCommit: ${tag}"
 
                 // Checkout template files
                 // Using tags here for the template files for versioning
@@ -58,7 +58,7 @@ def call(body) {
             input "A/B Deployment in PROD?"
 
             pipelineUtils.tagImage(config.test, config.microservice, tag, config.prodProject, config.microservice, tag)
-            
+
             pipelineUtils.blueGreen("templates/deploy-service-route-template.yaml",
                 "APPLICATION_NAME=${config.microservice} IMAGE_TAG=${tag}", config.prodProject, config.microservice)
 
