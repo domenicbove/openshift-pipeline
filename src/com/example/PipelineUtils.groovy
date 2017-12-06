@@ -101,7 +101,7 @@ def blueGreenDeploy(String ocpUrl, String authToken, String microservice, String
 
             // Now to do the roll out, first updating the dc that is receiving no traffic with the correct image
             processTemplateAndDeploy(ocpUrl, authToken, "${templatesDir}/deploy-service-template.yaml",
-                "APPLICATION_NAME=${microservice} IMAGE_TAG=${imageTag}", project, microservice)
+                "APPLICATION_NAME=${microservice} IMAGE_NAME=${microservice} IMAGE_TAG=${imageTag}", project, microservice)
 
             aborted = false
 
@@ -112,7 +112,7 @@ def blueGreenDeploy(String ocpUrl, String authToken, String microservice, String
         } finally {
             // Switch the route back to the "blue" deployment and delete green
             sh """
-                oc process -f ${templatesDir}/route-template.yml \
+                oc process -f ${templatesDir}/route-template.yaml \
                     APPLICATION_NAME=${microservice} -n ${project} | oc apply -f - -n ${project}
 
                 oc delete svc ${microservice}-green -n ${project}
