@@ -52,7 +52,7 @@ def processTemplateAndStartBuild(String templatePath,  String parameters, String
 /**
    * Processes and applies a template and then triggers a deployment
    */
-def processTemplateAndDeploy(String ocpUrl, String authToken, String templatePath, String parameters, String project, String deploymentConfigName) {
+def processTemplateAndDeploy(String ocpUrl, String authToken, String templatePath, String parameters, String project, String microservice) {
 
     stage("OCP Deploy"){
         print "Deploying in OpenShift..."
