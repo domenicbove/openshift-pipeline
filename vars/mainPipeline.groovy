@@ -45,18 +45,21 @@ def call(body) {
             pipelineUtils.unitTestAndPackageJar("app-root/pom.xml", "")
 
             pom = readMavenPom file: "app-root/pom.xml"
-            pipelineUtils.processTemplateAndStartBuild(config.ocpUrl, config.ocpAuthTokenCredentialId, "templates/build-template.yaml",
-                "APPLICATION_NAME=${config.microservice} OUTPUT_IMAGE_TAG=${tag}",
+            pipelineUtils.processTemplateAndStartBuild("templates/build-template.yaml", "APPLICATION_NAME=${config.microservice} OUTPUT_IMAGE_TAG=${tag}",
                 config.buildProject, config.microservice, "app-root/target/${pom.artifactId}-${pom.version}.jar")
 
-            pipelineUtils.processTemplateAndDeploy(config.ocpUrl, config.ocpAuthTokenCredentialId, "templates/deploy-service-route-template.yaml",
+            pipelineUtils.tagImage(config.buildProject, config.microservice, tag, config.testProject, config.microservice, tag)
+
+            pipelineUtils.processTemplateAndDeploy("templates/deploy-service-route-template.yaml",
                 "APPLICATION_NAME=${config.microservice} IMAGE_TAG=${tag}", config.testProject, config.microservice)
 
             // Testing stages go here
 
             input "A/B Deployment in PROD?"
 
-            pipelineUtils.blueGreen(copnfig.ocpUrl, config.ocpAuthTokenCredentialId, "templates/deploy-service-route-template.yaml",
+            pipelineUtils.tagImage(config.test, config.microservice, tag, config.prodProject, config.microservice, tag)
+            
+            pipelineUtils.blueGreen("templates/deploy-service-route-template.yaml",
                 "APPLICATION_NAME=${config.microservice} IMAGE_TAG=${tag}", config.prodProject, config.microservice)
 
         } // node

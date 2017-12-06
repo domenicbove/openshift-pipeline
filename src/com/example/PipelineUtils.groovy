@@ -22,14 +22,25 @@ def unitTestAndPackageJar(String pomPath, String mavenArgs) {
 }
 
 /**
+   * Tag image across projects
+   */
+def tagImage(String sourceProject, String sourceImage, String sourceTag, String destProject, String destImage, String destTag) {
+    stage('Tag Image'){
+        print "Tagging Image..."
+        sh """
+            oc tag ${sourceProject}/${sourceImage}:${sourceTag} ${destProject}/${destImage}:${destTag}
+        """
+    }
+}
+
+/**
    * Processes and applies a template and then starts a binary build from file
    */
-def processTemplateAndStartBuild(String ocpUrl, String ocpAuthTokenCredentialId, String templatePath,
-    String parameters, String project, String buildConfigName, String jarPath) {
+def processTemplateAndStartBuild(String templatePath,  String parameters, String project,
+    String buildConfigName, String jarPath) {
 
     stage("OCP Build"){
         print "Building in OpenShift..."
-        login(ocpUrl, ocpAuthTokenCredentialId)
         sh """
             oc process -f ${templatePath} ${parameters} -n ${project} | oc apply -f - -n ${project}
             oc start-build ${buildConfigName} --from-file=${jarPath} --follow -n ${project}
@@ -41,12 +52,10 @@ def processTemplateAndStartBuild(String ocpUrl, String ocpAuthTokenCredentialId,
 /**
    * Processes and applies a template and then triggers a deployment
    */
-def processTemplateAndDeploy(String ocpUrl, String ocpAuthTokenCredentialId, String templatePath,
-    String parameters, String project, String deploymentConfigName) {
+def processTemplateAndDeploy(String templatePath, String parameters, String project, String deploymentConfigName) {
 
     stage("OCP Deploy"){
         print "Deploying in OpenShift..."
-        login(ocpUrl, ocpAuthTokenCredentialId)
         sh """
             oc process -f ${templatePath} ${parameters} -n ${project} | oc apply -f - -n ${project}
         """
@@ -72,13 +81,12 @@ def processTemplateAndDeploy(String ocpUrl, String ocpAuthTokenCredentialId, Str
     }
 }
 
-def blueGreenDeploy(String microservice, String project, String ocpUrl, String templatesDir,
-    String ocpAuthTokenCredentialId, String imageTag) {
+def blueGreenDeploy(String microservice, String project, String templatesDir, String imageTag) {
 
     stage("A/B Deploy in ${project}"){
 
         // Deploy the "green" image
-        processTemplateAndDeploy(ocpUrl, ocpAuthTokenCredentialId, "${templatesDir}/deploy-service-template.yaml",
+        processTemplateAndDeploy("${templatesDir}/deploy-service-template.yaml",
             "APPLICATION_NAME=${microservice}-green IMAGE_TAG=${imageTag}", project, microservice)
 
         input 'Begin A/B Testing?'
@@ -103,7 +111,7 @@ def blueGreenDeploy(String microservice, String project, String ocpUrl, String t
             input 'Rollout?'
 
             // Now to do the roll out, first updating the dc that is receiving no traffic with the correct image
-            processTemplateAndDeploy(ocpUrl, ocpAuthTokenCredentialId, "${templatesDir}/deploy-service-template.yaml",
+            processTemplateAndDeploy("${templatesDir}/deploy-service-template.yaml",
                 "APPLICATION_NAME=${microservice} IMAGE_TAG=${imageTag}", project, microservice)
 
             aborted = false
