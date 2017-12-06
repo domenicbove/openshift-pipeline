@@ -29,7 +29,6 @@ def call(body) {
 
             env.SKIP_TLS = 'true'
 
-            ocpUrl = "https://openshift.default.svc.cluster.local"
             jenkinsToken = readFile('/var/run/secrets/kubernetes.io/serviceaccount/token').trim()
 
             stage('Checkout Source Code'){
@@ -53,16 +52,16 @@ def call(body) {
 
             pipelineUtils.tagImage(config.buildProject, config.microservice, tag, config.testProject, config.microservice, tag)
 
-            pipelineUtils.processTemplateAndDeploy(ocpUrl, jenkinsToken, "templates/deploy-service-route-template.yaml",
+            pipelineUtils.processTemplateAndDeploy(config.ocpUrl, jenkinsToken, "templates/deploy-service-route-template.yaml",
                 "APPLICATION_NAME=${config.microservice} IMAGE_TAG=${tag}", config.testProject, config.microservice)
 
             // Testing stages go here
 
             input "A/B Deployment in PROD?"
 
-            pipelineUtils.tagImage(config.test, config.microservice, tag, config.prodProject, config.microservice, tag)
+            pipelineUtils.tagImage(config.testProject, config.microservice, tag, config.prodProject, config.microservice, tag)
 
-            pipelineUtils.blueGreen(ocpUrl, jenkinsToken, "templates/deploy-service-route-template.yaml",
+            pipelineUtils.blueGreen(config.ocpUrl, jenkinsToken, "templates/deploy-service-route-template.yaml",
                 "APPLICATION_NAME=${config.microservice} IMAGE_TAG=${tag}", config.prodProject, config.microservice)
 
         } // node
