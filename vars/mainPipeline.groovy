@@ -57,12 +57,14 @@ def call(body) {
 
             // Testing stages go here
 
-            input "A/B Deployment in PROD?"
+            stage("Promote to Prod Input"){
+                input "A/B Deployment in PROD?"
+            }
 
             pipelineUtils.tagImage(config.testProject, config.microservice, tag, config.prodProject, config.microservice, tag)
 
-            pipelineUtils.blueGreen(config.ocpUrl, jenkinsToken, "templates/deploy-service-route-template.yaml",
-                "APPLICATION_NAME=${config.microservice} IMAGE_TAG=${tag}", config.prodProject, config.microservice)
+            pipelineUtils.blueGreenDeploy(config.ocpUrl, jenkinsToken, config.microservice, config.prodProject, "templates", tag)
+
 
         } // node
 
