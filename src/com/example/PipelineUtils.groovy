@@ -25,12 +25,10 @@ def unitTestAndPackageJar(String pomPath, String mavenArgs) {
    * Tag image across projects
    */
 def tagImage(String sourceProject, String sourceImage, String sourceTag, String destProject, String destImage, String destTag) {
-    stage('Tag Image'){
-        print "Tagging Image..."
-        sh """
-            oc tag ${sourceProject}/${sourceImage}:${sourceTag} ${destProject}/${destImage}:${destTag}
-        """
-    }
+    print "Tagging Image..."
+    sh """
+        oc tag ${sourceProject}/${sourceImage}:${sourceTag} ${destProject}/${destImage}:${destTag}
+    """
 }
 
 /**
@@ -53,21 +51,18 @@ def processTemplateAndStartBuild(String templatePath,  String parameters, String
    * Processes and applies a template and then triggers a deployment
    */
 def processTemplateAndDeploy(String ocpUrl, String authToken, String templatePath, String parameters, String project, String microservice) {
+    print "Deploying in OpenShift..."
+    sh """
+        oc process -f ${templatePath} ${parameters} -n ${project} | oc apply -f - -n ${project}
+    """
 
-    stage("OCP Deploy"){
-        print "Deploying in OpenShift..."
-        sh """
-            oc process -f ${templatePath} ${parameters} -n ${project} | oc apply -f - -n ${project}
-        """
-
-        openshiftVerifyDeployment(
-            depCfg: microservice,
-            namespace: project,
-            replicaCount: '1',
-            apiURL: ocpUrl,
-            authToken: authToken
-        )
-    }
+    openshiftVerifyDeployment(
+        depCfg: microservice,
+        namespace: project,
+        replicaCount: '1',
+        apiURL: ocpUrl,
+        authToken: authToken
+    )
 }
 
 def blueGreenDeploy(String ocpUrl, String authToken, String microservice, String project, String templatesDir, String imageTag) {

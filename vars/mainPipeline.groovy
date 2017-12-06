@@ -50,10 +50,12 @@ def call(body) {
             pipelineUtils.processTemplateAndStartBuild("templates/build-template.yaml", "APPLICATION_NAME=${config.microservice} OUTPUT_IMAGE_TAG=${tag}",
                 config.buildProject, config.microservice, "app-root/target/${pom.artifactId}-${pom.version}.jar")
 
-            pipelineUtils.tagImage(config.buildProject, config.microservice, tag, config.testProject, config.microservice, tag)
+            stage("Deploy in ${config.testProject}"){
+                pipelineUtils.tagImage(config.buildProject, config.microservice, tag, config.testProject, config.microservice, tag)
 
-            pipelineUtils.processTemplateAndDeploy(config.ocpUrl, jenkinsToken, "templates/deploy-service-route-template.yaml",
-                "APPLICATION_NAME=${config.microservice} IMAGE_TAG=${tag}", config.testProject, config.microservice)
+                pipelineUtils.processTemplateAndDeploy(config.ocpUrl, jenkinsToken, "templates/deploy-service-route-template.yaml",
+                    "APPLICATION_NAME=${config.microservice} IMAGE_TAG=${tag}", config.testProject, config.microservice)
+            }
 
             // Testing stages go here
 
