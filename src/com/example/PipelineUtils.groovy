@@ -76,7 +76,7 @@ def blueGreenDeploy(String ocpUrl, String authToken, String microservice, String
 
         // Deploy the "green" image
         processTemplateAndDeploy(ocpUrl, authToken, "${templatesDir}/deploy-service-template.yaml",
-            "APPLICATION_NAME=${microservice}-green IMAGE_TAG=${imageTag}", project, microservice-"green")
+            "APPLICATION_NAME=${microservice}-green IMAGE_TAG=${imageTag}", project, "${microservice}-green")
 
         input 'Begin A/B Testing?'
 
