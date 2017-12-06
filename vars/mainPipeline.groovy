@@ -29,6 +29,9 @@ def call(body) {
 
             env.SKIP_TLS = 'true'
 
+            ocpUrl = "https://openshift.default.svc.cluster.local"
+            jenkinsToken = readFile('/var/run/secrets/kubernetes.io/serviceaccount/token').trim()
+
             stage('Checkout Source Code'){
                 // Checkout source code
                 def scmVars = checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'app-root']], submoduleCfg: [], userRemoteConfigs: [[url: config.gitRepoUrl]]])
@@ -50,7 +53,7 @@ def call(body) {
 
             pipelineUtils.tagImage(config.buildProject, config.microservice, tag, config.testProject, config.microservice, tag)
 
-            pipelineUtils.processTemplateAndDeploy("templates/deploy-service-route-template.yaml",
+            pipelineUtils.processTemplateAndDeploy(ocpUrl, jenkinsToken, "templates/deploy-service-route-template.yaml",
                 "APPLICATION_NAME=${config.microservice} IMAGE_TAG=${tag}", config.testProject, config.microservice)
 
             // Testing stages go here
@@ -59,7 +62,7 @@ def call(body) {
 
             pipelineUtils.tagImage(config.test, config.microservice, tag, config.prodProject, config.microservice, tag)
 
-            pipelineUtils.blueGreen("templates/deploy-service-route-template.yaml",
+            pipelineUtils.blueGreen(ocpUrl, jenkinsToken, "templates/deploy-service-route-template.yaml",
                 "APPLICATION_NAME=${config.microservice} IMAGE_TAG=${tag}", config.prodProject, config.microservice)
 
         } // node

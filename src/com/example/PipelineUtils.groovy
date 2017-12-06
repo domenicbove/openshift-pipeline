@@ -52,7 +52,7 @@ def processTemplateAndStartBuild(String templatePath,  String parameters, String
 /**
    * Processes and applies a template and then triggers a deployment
    */
-def processTemplateAndDeploy(String templatePath, String parameters, String project, String deploymentConfigName) {
+def processTemplateAndDeploy(String ocpUrl, String authToken, String templatePath, String parameters, String project, String deploymentConfigName) {
 
     stage("OCP Deploy"){
         print "Deploying in OpenShift..."
@@ -60,33 +60,22 @@ def processTemplateAndDeploy(String templatePath, String parameters, String proj
             oc process -f ${templatePath} ${parameters} -n ${project} | oc apply -f - -n ${project}
         """
 
-        withCredentials([string(credentialsId: ocpAuthTokenCredentialId, variable: 'authToken')]) {
-
-            // Assuming the deployment config has image change triggers, skip right to verify deployment
-            // openshiftDeploy(
-            //     depCfg: microservice,
-            //     namespace: project,
-            //     apiURL: ocpUrl,
-            //     authToken: authToken
-            // )
-
-            openshiftVerifyDeployment(
-                depCfg: microservice,
-                namespace: project,
-                replicaCount: '1',
-                apiURL: ocpUrl,
-                authToken: authToken
-            )
-        }
+        openshiftVerifyDeployment(
+            depCfg: microservice,
+            namespace: project,
+            replicaCount: '1',
+            apiURL: ocpUrl,
+            authToken: authToken
+        )
     }
 }
 
-def blueGreenDeploy(String microservice, String project, String templatesDir, String imageTag) {
+def blueGreenDeploy(String ocpUrl, String authToken, String microservice, String project, String templatesDir, String imageTag) {
 
     stage("A/B Deploy in ${project}"){
 
         // Deploy the "green" image
-        processTemplateAndDeploy("${templatesDir}/deploy-service-template.yaml",
+        processTemplateAndDeploy(ocpUrl, authToken, "${templatesDir}/deploy-service-template.yaml",
             "APPLICATION_NAME=${microservice}-green IMAGE_TAG=${imageTag}", project, microservice)
 
         input 'Begin A/B Testing?'
@@ -111,7 +100,7 @@ def blueGreenDeploy(String microservice, String project, String templatesDir, St
             input 'Rollout?'
 
             // Now to do the roll out, first updating the dc that is receiving no traffic with the correct image
-            processTemplateAndDeploy("${templatesDir}/deploy-service-template.yaml",
+            processTemplateAndDeploy(ocpUrl, authToken, "${templatesDir}/deploy-service-template.yaml",
                 "APPLICATION_NAME=${microservice} IMAGE_TAG=${imageTag}", project, microservice)
 
             aborted = false
