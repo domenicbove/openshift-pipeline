@@ -58,6 +58,7 @@ def call(body) {
             }
 
             // Testing stages go here
+            pipelineUtils.imageScan("templates/image-inspector-pod-template.yaml", tag, image, config.testProject)
 
             stage("Promote to Prod Input"){
                 input "A/B Deployment in PROD?"

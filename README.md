@@ -19,6 +19,12 @@ oc policy add-role-to-user edit system:serviceaccount:cicd:jenkins -n demo-test
 oc policy add-role-to-user edit system:serviceaccount:cicd:jenkins -n demo-prod
 ```
 
+Create a image inspector SA in test project with privileged scc
+```bash
+oc create sa image-inspector -n demo-test
+oc adm policy add-scc-to-user privileged -z image-inspector -n demo-test
+```
+
 Now you can create a Jenkinsfile like this:
 ```
 library identifier: 'openshift-pipeline@master', retriever: modernSCM([$class: 'GitSCMSource',

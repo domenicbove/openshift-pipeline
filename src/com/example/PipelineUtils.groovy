@@ -115,36 +115,33 @@ def blueGreenDeploy(String ocpUrl, String authToken, String microservice, String
     }
 }
 
-def imageScan(){
+def imageScan(String templatePath, String tag, String image, String project){
     stage("Image Scan") {
-        // TODO finish this
-        // checkout the template
-        checkout([$class: 'GitSCM', branches: [[name: "master"]], doGenerateSubmoduleConfigurations: false, extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'mplat-openshift']], submoduleCfg: [], userRemoteConfigs: [[credentialsId: 'a16fe3a9-b41b-4fe8-8f1a-55ae9607ad40', url: 'https://bitbucket.mfoundry.net/scm/~andrew.sandstrom/mplat-openshift.git']]])
+        // Need to run below in your project for template to work
+        //oc create sa image-inspector
+        //oc adm policy add-scc-to-user privileged -z image-inspector -n cicd
 
-        // process template and create the pod, obviously you can pass the image from you pipeline here, podname should be unique as well
+        // Process template and creat in project
         sh """
-            oc process -f templates/image-inspector-pod-template.yml POD_NAME=image-inspector \
-                IMAGE_URL=docker-registry.default.svc:5000/cicd/openjdk18-openshift \
+            oc process -f ${templatePath} POD_NAME=image-inspector-${tag} IMAGE_URL=${image} \
                 DOCKER_CONFIG_SECRET=\$(oc get secrets | grep image-inspector-dockercfg | awk '{print \$1}') \
-                | oc apply -f - -n cicd
+                | oc apply -f - -n ${project}
         """
 
-        // wait for readiness probe, ie has the image scan finished
+        // Wait for readiness probe to pass, indicating the image scan finished
         status = "0/1"
         while(!status.contains("1/1")) {
             sleep 10
-            status = sh (script: 'oc get pods | grep image-inspector-pod | awk \'{print $2}\'',
+            status = sh (script: "oc get pods -n ${project}| grep image-inspector-${tag} | awk '{print $2}'",
                 returnStdout: true).trim()
         }
 
-        // get the results.html file back to jenkins
+        // Bring the results.html file back to Jenkins and delete the pod
         sh """
-            oc rsync image-inspector-pod:/tmp/image-content/results.html . -n cicd
-            ls
-            oc delete pod image-inspector-pod
+            oc rsync image-inspector-${tag}:/tmp/image-content/results.html . -n ${project}
+            oc delete pod image-inspector-${tag}
         """
 
-        // archive it or do whatever you desire w it
         archiveArtifacts 'results.html'
 
     }
