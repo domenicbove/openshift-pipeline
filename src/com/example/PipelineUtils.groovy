@@ -124,7 +124,7 @@ def imageScan(String templatePath, String registryUrl, String project, String mi
         // Process template and creat in project
         sh """
             oc process -f ${templatePath} POD_NAME=image-inspector-${tag} IMAGE_URL=${registryUrl}/${project}/${microservice}:${tag} \
-                DOCKER_CONFIG_SECRET=\$(oc get secrets | grep image-inspector-dockercfg | awk '{print \$1}') \
+                DOCKER_CONFIG_SECRET=\$(oc get secrets -n ${project} | grep image-inspector-dockercfg | awk '{print \$1}') \
                 | oc apply -f - -n ${project}
         """
 
