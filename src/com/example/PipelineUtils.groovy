@@ -115,7 +115,7 @@ def blueGreenDeploy(String ocpUrl, String authToken, String microservice, String
     }
 }
 
-def imageScan(String templatePath, String tag, String image, String project){
+def imageScan(String templatePath, String registryUrl, String project, String microservice, String tag){
     stage("Image Scan") {
         // Need to run below in your project for template to work
         //oc create sa image-inspector
@@ -123,7 +123,7 @@ def imageScan(String templatePath, String tag, String image, String project){
 
         // Process template and creat in project
         sh """
-            oc process -f ${templatePath} POD_NAME=image-inspector-${tag} IMAGE_URL=${image} \
+            oc process -f ${templatePath} POD_NAME=image-inspector-${tag} IMAGE_URL=${registryUrl}/${project}/${microservice}:${tag} \
                 DOCKER_CONFIG_SECRET=\$(oc get secrets | grep image-inspector-dockercfg | awk '{print \$1}') \
                 | oc apply -f - -n ${project}
         """
