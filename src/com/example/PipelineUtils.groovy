@@ -132,7 +132,7 @@ def imageScan(String templatePath, String registryUrl, String project, String mi
         status = "0/1"
         while(!status.contains("1/1")) {
             sleep 10
-            status = sh (script: "oc get pods -n ${project}| grep image-inspector-${tag} | awk '{print $2}'",
+            status = sh (script: "oc get pods -n ${project}| grep image-inspector-${tag} | awk '{print \$2}'",
                 returnStdout: true).trim()
         }
 
