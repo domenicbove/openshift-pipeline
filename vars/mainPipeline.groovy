@@ -58,7 +58,7 @@ def call(body) {
             }
 
             // Testing stages go here
-            pipelineUtils.imageScan("templates/image-inspector-pod-template.yaml", "docker-registry.default.svc:5000", config.testProject, config.microservice, tag)
+            pipelineUtils.imageScan("templates/image-inspector-pod-template.yml", "docker-registry.default.svc:5000", config.testProject, config.microservice, tag)
 
             stage("Promote to Prod Input"){
                 input "A/B Deployment in PROD?"
