@@ -115,6 +115,41 @@ def blueGreenDeploy(String ocpUrl, String authToken, String microservice, String
     }
 }
 
+def imageScan(){
+    stage("Image Scan") {
+        // TODO finish this
+        // checkout the template
+        checkout([$class: 'GitSCM', branches: [[name: "master"]], doGenerateSubmoduleConfigurations: false, extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'mplat-openshift']], submoduleCfg: [], userRemoteConfigs: [[credentialsId: 'a16fe3a9-b41b-4fe8-8f1a-55ae9607ad40', url: 'https://bitbucket.mfoundry.net/scm/~andrew.sandstrom/mplat-openshift.git']]])
+
+        // process template and create the pod, obviously you can pass the image from you pipeline here, podname should be unique as well
+        sh """
+            oc process -f templates/image-inspector-pod-template.yml POD_NAME=image-inspector \
+                IMAGE_URL=docker-registry.default.svc:5000/cicd/openjdk18-openshift \
+                DOCKER_CONFIG_SECRET=\$(oc get secrets | grep image-inspector-dockercfg | awk '{print \$1}') \
+                | oc apply -f - -n cicd
+        """
+
+        // wait for readiness probe, ie has the image scan finished
+        status = "0/1"
+        while(!status.contains("1/1")) {
+            sleep 10
+            status = sh (script: 'oc get pods | grep image-inspector-pod | awk \'{print $2}\'',
+                returnStdout: true).trim()
+        }
+
+        // get the results.html file back to jenkins
+        sh """
+            oc rsync image-inspector-pod:/tmp/image-content/results.html . -n cicd
+            ls
+            oc delete pod image-inspector-pod
+        """
+
+        // archive it or do whatever you desire w it
+        archiveArtifacts 'results.html'
+
+    }
+}
+
 def downloadDeploymentAndBlueGreenDeploy(String microservice, String project, String ocpUrl, String ocpAuthTokenCredentialId,
     String artifactoryCredentialsId, String registryUrl, String imageTag, String additionalArgs) {
 
