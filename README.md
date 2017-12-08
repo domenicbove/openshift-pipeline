@@ -35,7 +35,7 @@ mainPipeline {
     microservice = "simple-server"
     templateGitRepoUrl = "https://github.com/domenicbove/openshift-templates.git"
     templateGitTag = "master"
-    ocpUrl = "master1.fismobile.net"
+    ocpUrl = "master1.ocp.com"
     buildProject = "demo-build"
     testProject = "demo-test"
     prodProject = "demo-prod"
