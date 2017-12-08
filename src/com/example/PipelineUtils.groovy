@@ -142,7 +142,8 @@ def imageScan(String templatePath, String registryUrl, String project, String mi
             oc delete pod image-inspector-${tag} -n ${project}
         """
 
-        archiveArtifacts 'results.html'
+        //archiveArtifacts 'results.html'
+        publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: '', reportFiles: 'results.html', reportName: 'Image Scan Results', reportTitles: ''])
 
     }
 }
