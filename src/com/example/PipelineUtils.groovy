@@ -142,11 +142,9 @@ def imageScan(String templatePath, String registryUrl, String project, String mi
         """
         archiveArtifacts 'results.html'
 
-        input "Results OK?"
-
-        // Bring the results.html file back to Jenkins and delete the pod
+        // Delete the pod
         sh """
-            oc delete all -l app=image-inspector-${tag} -n ${project}
+            oc delete pod app=image-inspector-${tag} -n ${project}
         """
 
     }
