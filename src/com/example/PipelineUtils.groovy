@@ -144,7 +144,7 @@ def imageScan(String templatePath, String registryUrl, String project, String mi
 
         // Delete the pod
         sh """
-            oc delete pod app=image-inspector-${tag} -n ${project}
+            oc delete pod image-inspector-${tag} -n ${project}
         """
 
     }
