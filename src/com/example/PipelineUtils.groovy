@@ -136,14 +136,18 @@ def imageScan(String templatePath, String registryUrl, String project, String mi
                 returnStdout: true).trim()
         }
 
-        // Bring the results.html file back to Jenkins and delete the pod
+        // Bring the results.html file back to Jenkins
         sh """
             oc rsync image-inspector-${tag}:/tmp/image-content/results.html . -n ${project}
-            oc delete pod image-inspector-${tag} -n ${project}
         """
+        archiveArtifacts 'results.html'
 
-        //archiveArtifacts 'results.html'
-        publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: '', reportFiles: 'results.html', reportName: 'Image Scan Results', reportTitles: ''])
+        input "Results OK?"
+
+        // Bring the results.html file back to Jenkins and delete the pod
+        sh """
+            oc delete all -l app=image-inspector-${tag} -n ${project}
+        """
 
     }
 }
