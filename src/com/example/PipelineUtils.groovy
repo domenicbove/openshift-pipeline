@@ -150,6 +150,80 @@ def imageScan(String templatePath, String registryUrl, String project, String mi
     }
 }
 
+/**
+   * Spins up JMeter slave pods and runs Distrubuted Stress tests
+   * Must run on jenkins instance with jmeter binaries and JMETER_HOME set
+   */
+def stressTest(String microservice, int slaveReplicas, String jenkinsProject, String ocpUrl,
+    String jenkinsToken, String stressTestProject, String testFilePath, String propertiesFilePath) {
+
+    stage('Stress Test') {
+        sh """
+            oc process -f openshift/templates/mplat-jmeter-slave-template.yml \
+                APPLICATION_NAME=jmeter-slave-${microservice} REPLICAS=${slaveReplicas} -n ${jenkinsProject} | oc apply -f - -n ${jenkinsProject}
+        """
+
+        openshiftVerifyDeployment(
+            depCfg: "jmeter-slave-${microservice}",
+            namespace: jenkinsProject,
+            replicaCount: slaveReplicas,
+            apiURL: ocpUrl,
+            authToken: jenkinsToken
+        )
+
+        pods = sh (
+            script: """
+                oc get pods -n ${jenkinsProject} | grep jmeter-slave-${microservice} | awk '{print \$1}'
+            """,
+            returnStdout: true
+        ).trim()
+        podList = pods.split("\n")
+
+        ips = ""
+        // Loop through the pods and collect their IPS
+        for (int i = 0; i < podList.size(); i++) {
+            pod = podList[i]
+            ip = sh (
+                script: """
+                    oc describe pod ${pod} -n ${jenkinsProject} | grep IP | awk '{print \$2}'
+                """,
+                returnStdout: true
+            ).trim()
+            ips = ips + ip + ","
+        }
+        // Get rid of that last comma
+        ips = ips.substring(0, ips.length()-1)
+
+        sh """
+            ${JMETER_HOME}/bin/jmeter -n -t "${testFilePath}" \
+                -p "${propertiesFilePath}" -j /dev/stdout \
+                -Ghostname=${microservice}-${stressTestProject}.snapshot.mservices.fismobile.net \
+                -Gthreads=50 -Gcount=50 \
+                -R ${ips} \
+                -l "app-root/jmeter/results.jtl"
+            oc delete all -l app=jmeter-slave-${microservice} -n ${jenkinsProject}
+        """
+
+        performanceReport compareBuildPrevious: false,
+            configType: 'ART',
+            errorFailedThreshold: 0,
+            errorUnstableResponseTimeThreshold: '',
+            errorUnstableThreshold: 0,
+            failBuildIfNoResultFile: false,
+            ignoreFailedBuild: false,
+            ignoreUnstableBuild: true,
+            modeOfThreshold: false,
+            modePerformancePerTestCase: true,
+            modeThroughput: true,
+            nthBuildNumber: 0,
+            parsers: [[$class: 'JMeterParser', glob: 'app-root/jmeter/results.jtl']],
+            relativeFailedThresholdNegative: 0,
+            relativeFailedThresholdPositive: 0,
+            relativeUnstableThresholdNegative: 0,
+            relativeUnstableThresholdPositive: 0
+    }
+}
+
 def downloadDeploymentAndBlueGreenDeploy(String microservice, String project, String ocpUrl, String ocpAuthTokenCredentialId,
     String artifactoryCredentialsId, String registryUrl, String imageTag, String additionalArgs) {
 
