@@ -159,7 +159,7 @@ def stressTest(String microservice, int slaveReplicas, String jenkinsProject, St
 
     stage('Stress Test') {
         sh """
-            oc process -f openshift/templates/mplat-jmeter-slave-template.yml \
+            oc process -f openshift/templates/jmeter-slave-template.yml \
                 APPLICATION_NAME=jmeter-slave-${microservice} REPLICAS=${slaveReplicas} -n ${jenkinsProject} | oc apply -f - -n ${jenkinsProject}
         """
 
